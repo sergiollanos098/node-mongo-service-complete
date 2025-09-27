@@ -1,111 +1,92 @@
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-import morgan from "morgan";
-import swaggerJsdoc from "swagger-jsdoc";
-import swaggerUi from "swagger-ui-express";
-import { faker } from "@faker-js/faker";
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const morgan = require("morgan");
+const swaggerUi = require("swagger-ui-express");
+const swaggerJsdoc = require("swagger-jsdoc");
+const faker = require("faker");
+
+const User = require("./models/user");
+const Order = require("./models/order");
 
 const app = express();
-app.use(express.json());
 app.use(cors());
 app.use(morgan("dev"));
+app.use(express.json());
 
-// ---------------- DB ----------------
-const MONGO_URI = process.env.MONGO_URI || "mongodb://mongo-db:27017/shopdb";
-mongoose.connect(MONGO_URI)
+// Conexión a MongoDB
+mongoose
+  .connect(process.env.MONGO_URI || "mongodb://mongo-db:27017/shopdb")
   .then(() => console.log("✅ MongoDB conectado"))
-  .catch((err) => console.error("❌ Error conectando Mongo:", err));
+  .catch((err) => console.error("❌ Error MongoDB:", err));
 
-// ---------------- MODELS ----------------
-const productSchema = new mongoose.Schema({
-  name: String,
-  price: Number,
-  stock: Number
-});
-
-const orderSchema = new mongoose.Schema({
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
-  quantity: Number,
-  total: Number,
-  date: { type: Date, default: Date.now }
-});
-
-const Product = mongoose.model("Product", productSchema);
-const Order = mongoose.model("Order", orderSchema);
-
-// ---------------- SWAGGER ----------------
-const swaggerOptions = {
+// Swagger config
+const options = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "Node + Mongo Microservice API",
+      title: "Node.js + MongoDB Microservice",
       version: "1.0.0",
-      description: "API para gestionar productos y órdenes"
-    },
-    servers: [
-      { url: "http://localhost:3000" } // 🔥 Cambia a ALB DNS en AWS
-    ],
+      description: "Microservicio para Users y Orders"
+    }
   },
-  apis: ["./app.js"],
+  apis: ["./app.js"]
 };
+const swaggerSpec = swaggerJsdoc(options);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
-app.use("/apidocs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-// ---------------- PRODUCTS CRUD ----------------
 /**
  * @swagger
  * tags:
- *   name: Products
- *   description: Gestión de productos
+ *   name: Users
+ *   description: CRUD de usuarios
  */
 
 /**
  * @swagger
- * /products:
+ * /users:
  *   get:
- *     summary: Obtener todos los productos
- *     tags: [Products]
+ *     summary: Obtener todos los usuarios
+ *     tags: [Users]
  *     responses:
  *       200:
- *         description: Lista de productos
+ *         description: Lista de usuarios
  */
-app.get("/products", async (req, res) => {
-  const products = await Product.find();
-  res.json(products);
+app.get("/users", async (req, res) => {
+  const users = await User.find();
+  res.json(users);
 });
 
 /**
  * @swagger
- * /products/{id}:
+ * /users/{id}:
  *   get:
- *     summary: Obtener un producto por ID
- *     tags: [Products]
+ *     summary: Obtener un usuario por ID
+ *     tags: [Users]
  *     parameters:
  *       - in: path
  *         name: id
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *     responses:
  *       200:
- *         description: Producto encontrado
+ *         description: Usuario encontrado
  *       404:
- *         description: Producto no encontrado
+ *         description: Usuario no encontrado
  */
-app.get("/products/:id", async (req, res) => {
-  const product = await Product.findById(req.params.id);
-  if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json(product);
+app.get("/users/:id", async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json(user);
 });
 
 /**
  * @swagger
- * /products:
+ * /users:
  *   post:
- *     summary: Crear un nuevo producto
- *     tags: [Products]
+ *     summary: Crear un usuario
+ *     tags: [Users]
  *     requestBody:
  *       required: true
  *       content:
@@ -113,78 +94,81 @@ app.get("/products/:id", async (req, res) => {
  *           schema:
  *             type: object
  *             properties:
- *               name: { type: string }
- *               price: { type: number }
- *               stock: { type: number }
+ *               username: { type: string }
+ *               email: { type: string }
  *     responses:
  *       201:
- *         description: Producto creado exitosamente
+ *         description: Usuario creado
  */
-app.post("/products", async (req, res) => {
-  const product = new Product(req.body);
-  await product.save();
-  res.status(201).json({ message: "Product created", product });
+app.post("/users", async (req, res) => {
+  const user = new User(req.body);
+  await user.save();
+  res.status(201).json(user);
 });
 
 /**
  * @swagger
- * /products/{id}:
+ * /users/{id}:
  *   put:
- *     summary: Actualizar un producto
- *     tags: [Products]
+ *     summary: Actualizar un usuario
+ *     tags: [Users]
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
+ *         schema:
+ *           type: string
  *     requestBody:
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               name: { type: string }
- *               price: { type: number }
- *               stock: { type: number }
+ *               username: { type: string }
+ *               email: { type: string }
  *     responses:
  *       200:
- *         description: Producto actualizado
+ *         description: Usuario actualizado
  *       404:
- *         description: Producto no encontrado
+ *         description: Usuario no encontrado
  */
-app.put("/products/:id", async (req, res) => {
-  const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json({ message: "Product updated", product });
+app.put("/users/:id", async (req, res) => {
+  const user = await User.findByIdAndUpdate(req.params.id, req.body, {
+    new: true
+  });
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json(user);
 });
 
 /**
  * @swagger
- * /products/{id}:
+ * /users/{id}:
  *   delete:
- *     summary: Eliminar un producto
- *     tags: [Products]
+ *     summary: Eliminar un usuario
+ *     tags: [Users]
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Producto eliminado
+ *         description: Usuario eliminado
  *       404:
- *         description: Producto no encontrado
+ *         description: Usuario no encontrado
  */
-app.delete("/products/:id", async (req, res) => {
-  const product = await Product.findByIdAndDelete(req.params.id);
-  if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json({ message: "Product deleted" });
+app.delete("/users/:id", async (req, res) => {
+  const user = await User.findByIdAndDelete(req.params.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json({ message: "User deleted successfully" });
 });
 
-// ---------------- ORDERS CRUD ----------------
 /**
  * @swagger
  * tags:
  *   name: Orders
- *   description: Gestión de órdenes
+ *   description: CRUD de órdenes
  */
 
 /**
@@ -198,15 +182,39 @@ app.delete("/products/:id", async (req, res) => {
  *         description: Lista de órdenes
  */
 app.get("/orders", async (req, res) => {
-  const orders = await Order.find().populate("productId");
+  const orders = await Order.find().populate("userId");
   res.json(orders);
+});
+
+/**
+ * @swagger
+ * /orders/{id}:
+ *   get:
+ *     summary: Obtener una orden por ID
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Orden encontrada
+ *       404:
+ *         description: Orden no encontrada
+ */
+app.get("/orders/:id", async (req, res) => {
+  const order = await Order.findById(req.params.id).populate("userId");
+  if (!order) return res.status(404).json({ message: "Order not found" });
+  res.json(order);
 });
 
 /**
  * @swagger
  * /orders:
  *   post:
- *     summary: Crear una nueva orden
+ *     summary: Crear una orden
  *     tags: [Orders]
  *     requestBody:
  *       required: true
@@ -215,22 +223,51 @@ app.get("/orders", async (req, res) => {
  *           schema:
  *             type: object
  *             properties:
- *               productId: { type: string }
- *               quantity: { type: number }
+ *               userId: { type: string }
+ *               product: { type: string }
+ *               amount: { type: number }
  *     responses:
  *       201:
- *         description: Orden creada exitosamente
+ *         description: Orden creada
  */
 app.post("/orders", async (req, res) => {
-  const { productId, quantity } = req.body;
-  const product = await Product.findById(productId);
-  if (!product) return res.status(404).json({ message: "Product not found" });
-
-  const total = product.price * quantity;
-  const order = new Order({ productId, quantity, total });
+  const order = new Order(req.body);
   await order.save();
+  res.status(201).json(order);
+});
 
-  res.status(201).json({ message: "Order created", order });
+/**
+ * @swagger
+ * /orders/{id}:
+ *   put:
+ *     summary: Actualizar una orden
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               product: { type: string }
+ *               amount: { type: number }
+ *     responses:
+ *       200:
+ *         description: Orden actualizada
+ *       404:
+ *         description: Orden no encontrada
+ */
+app.put("/orders/:id", async (req, res) => {
+  const order = await Order.findByIdAndUpdate(req.params.id, req.body, {
+    new: true
+  }).populate("userId");
+  if (!order) return res.status(404).json({ message: "Order not found" });
+  res.json(order);
 });
 
 /**
@@ -243,6 +280,8 @@ app.post("/orders", async (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Orden eliminada
@@ -252,10 +291,36 @@ app.post("/orders", async (req, res) => {
 app.delete("/orders/:id", async (req, res) => {
   const order = await Order.findByIdAndDelete(req.params.id);
   if (!order) return res.status(404).json({ message: "Order not found" });
-  res.json({ message: "Order deleted" });
+  res.json({ message: "Order deleted successfully" });
 });
 
-// ---------------- SERVER ----------------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+/**
+ * @swagger
+ * /seed:
+ *   post:
+ *     summary: Insertar datos falsos
+ *     tags: [Users, Orders]
+ *     responses:
+ *       200:
+ *         description: Datos de prueba generados
+ */
+app.post("/seed", async (req, res) => {
+  for (let i = 0; i < 5; i++) {
+    const user = new User({
+      username: faker.internet.userName(),
+      email: faker.internet.email()
+    });
+    await user.save();
 
+    const order = new Order({
+      userId: user._id,
+      product: faker.commerce.productName(),
+      amount: faker.commerce.price()
+    });
+    await order.save();
+  }
+  res.json({ message: "Datos falsos insertados" });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Node service corriendo en puerto ${PORT}`));
